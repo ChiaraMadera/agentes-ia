@@ -59,7 +59,7 @@ AgentFactory ──► IAgent (Strategy)
 
    ```bash
    git clone https://github.com/ChiaraMadera/agentes-ia.git
-   cd agentesia
+   cd agentes-ia
    ```
 
 3. Ejecutar la aplicación. La forma más simple es abrir el proyecto en IntelliJ IDEA y correr la clase `org.example.Main`. Por consola, con Maven instalado:
