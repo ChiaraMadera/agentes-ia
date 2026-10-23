@@ -1,71 +1,102 @@
 package org.example.ui;
 
-import org.example.agents.IAgent;
-import org.example.agents.desarrollo.GeneratorCodeAgent;
-import org.example.agents.texto.TranslatorTextAgent;
-import org.example.factory.AgentFactory;
+import org.example.agents.AgentType;
+import org.example.client.LlmClient;
+import org.example.client.LlmClientException;
 
+import java.io.InputStream;
+import java.io.PrintStream;
+import java.util.Objects;
 import java.util.Scanner;
 
+/**
+ * Alternativa por línea de comandos a {@link AgentUI}.
+ *
+ * <p>Usa el mismo registro {@link AgentType} que la interfaz gráfica. Lee siempre
+ * líneas completas y parsea el número, de modo que una entrada no numérica produce
+ * un mensaje de error en lugar de una excepción.
+ */
 public class Console {
-    private Scanner scanner = new Scanner(System.in);
-    private String prompt;
-    private int option;
 
-    public Console(){
+    private final LlmClient client;
+    private final Scanner scanner;
+    private final PrintStream out;
 
+    public Console(LlmClient client) {
+        this(client, System.in, System.out);
     }
 
-    public void menu() throws Exception{
+    /** Constructor que permite inyectar entrada y salida para pruebas. */
+    public Console(LlmClient client, InputStream in, PrintStream out) {
+        this.client = Objects.requireNonNull(client, "client");
+        this.scanner = new Scanner(Objects.requireNonNull(in, "in"));
+        this.out = Objects.requireNonNull(out, "out");
+    }
 
-        //GeneratorCodeAgent agent = new GeneratorCodeAgent(new LLMClient());
-        // Solicitar al usuario las especificaciones del codigo
-        //System.out.println("Ingrese las especificaciones del código que desea generar: ");
-        //prompt = scanner.nextLine();
-        // Ejecutar el agente y mostrar el resultado
-        //System.out.println(agent.execute(prompt));
+    public void menu() {
+        AgentType[] agents = AgentType.values();
 
-        while (option != 3) {
-            System.out.println("Seleccione una opcion: ");
-            System.out.println("1- Generador de codigo");
-            System.out.println("2- Traductor al castellano");
-            System.out.println("3- Salir");
+        while (true) {
+            printMenu(agents);
 
-            option = scanner.nextInt();
-            scanner.nextLine();
+            String line = readLine();
+            if (line == null) {
+                return;
+            }
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            int option;
+            try {
+                option = Integer.parseInt(line);
+            } catch (NumberFormatException e) {
+                out.println("Error: debe ingresar un número válido.");
+                continue;
+            }
+
+            if (option == 0) {
+                out.println("Saliendo.....");
+                return;
+            }
+            if (option < 1 || option > agents.length) {
+                out.println("Opción inválida, vuelva a intentar.");
+                continue;
+            }
+
+            AgentType selected = agents[option - 1];
+            out.println(selected.getInputLabel());
+
+            String prompt = readLine();
+            if (prompt == null) {
+                return;
+            }
+            if (prompt.isEmpty()) {
+                out.println("La entrada no puede estar vacía.");
+                continue;
+            }
 
             try {
-                switch (option) {
-                    case 1: {
-                        System.out.println("Ingrese el codigo a generar");
-                        prompt = scanner.nextLine();
-
-                        IAgent agent = AgentFactory.create(option);
-                        System.out.println(agent.execute(prompt));
-                        break;
-                    }
-
-                    case 2: {
-                        System.out.println("Ingrese el texto a traducir.");
-                        prompt = scanner.nextLine();
-
-                        IAgent agent = AgentFactory.create(option);
-                        System.out.println(agent.execute(prompt));
-                        break;
-                    }
-
-
-                    case 3:
-                        System.out.println("Saliendo.....");
-                        break;
-
-                    default:
-                        System.out.println("Opcion invalida, vuelva a intentar.");
-                }
-            } catch (NumberFormatException e) {
-                System.out.println("Error: debe ingresar un numero valido");
+                out.println(selected.create(client).execute(prompt));
+            } catch (LlmClientException e) {
+                out.println("Error: " + e.getMessage());
             }
         }
+    }
 
+    private void printMenu(AgentType[] agents) {
+        out.println("Seleccione una opción:");
+        for (int i = 0; i < agents.length; i++) {
+            out.println((i + 1) + "- " + agents[i]);
+        }
+        out.println("0- Salir");
+    }
+
+    /** Devuelve la línea sin espacios, o {@code null} si la entrada terminó. */
+    private String readLine() {
+        if (!scanner.hasNextLine()) {
+            return null;
+        }
+        return scanner.nextLine().trim();
     }
 }

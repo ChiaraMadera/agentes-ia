@@ -1,26 +1,28 @@
 package org.example.ui;
 
-import org.example.agents.IAgent;
-import org.example.factory.AgentFactory;
+import org.example.agents.AgentType;
+import org.example.client.LlmClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 
+/**
+ * Ventana principal: selección de agente, entrada, resultado y estado de progreso.
+ *
+ * <p>El cliente del LLM se recibe por constructor. La ventana no arma sus propias
+ * dependencias ni se muestra a sí misma: eso queda a cargo del punto de entrada.
+ */
 public class AgentUI extends JFrame {
 
-    // Combo box
-    private static final String[] AGENTES = {
-            "Generador de código",
-            "Traductor de textos al español"
-    };
+    private static final Logger LOGGER = LoggerFactory.getLogger(AgentUI.class);
 
-    // Combo box
-    private static final String[] LABELS_INPUT = {
-            "Ingrese las especificaciones del codigo:",
-            "Ingrese el texto a traducir :"
-    };
+    private final LlmClient client;
 
-    private final JComboBox<String> agentComboBox;
+    private final JComboBox<AgentType> agentComboBox;
     private final JLabel inputLabel;
     private final JTextArea inputArea;
     private final JTextArea outputArea;
@@ -28,7 +30,9 @@ public class AgentUI extends JFrame {
     private final JButton clearButton;
     private final JProgressBar progressBar;
 
-    public AgentUI() {
+    public AgentUI(LlmClient client) {
+        this.client = Objects.requireNonNull(client, "client");
+
         setTitle("Agentes IA - Agentes Inteligentes");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(700, 600);
@@ -38,7 +42,7 @@ public class AgentUI extends JFrame {
         // Panel superior: selección de agente
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
         topPanel.add(new JLabel("Seleccione el agente:"));
-        agentComboBox = new JComboBox<>(AGENTES);
+        agentComboBox = new JComboBox<>(AgentType.values());
         agentComboBox.addActionListener(e -> updateInputLabel());
         topPanel.add(agentComboBox);
         add(topPanel, BorderLayout.NORTH);
@@ -50,7 +54,7 @@ public class AgentUI extends JFrame {
         gbc.insets = new Insets(5, 10, 5, 10);
 
         // Label de input
-        inputLabel = new JLabel(LABELS_INPUT[0]);
+        inputLabel = new JLabel(((AgentType) agentComboBox.getSelectedItem()).getInputLabel());
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.weightx = 1.0;
@@ -110,21 +114,19 @@ public class AgentUI extends JFrame {
         authorLabel.setForeground(Color.GRAY);
         bottomPanel.add(authorLabel);
         add(bottomPanel, BorderLayout.SOUTH);
-
-        setVisible(true);
     }
 
     private void updateInputLabel() {
-        int index = agentComboBox.getSelectedIndex();
-        if (index >= 0 && index < LABELS_INPUT.length) {
-            inputLabel.setText(LABELS_INPUT[index]);
+        AgentType selected = (AgentType) agentComboBox.getSelectedItem();
+        if (selected != null) {
+            inputLabel.setText(selected.getInputLabel());
         }
         inputArea.requestFocusInWindow();
     }
 
     private void executeAgent() {
-        int index = agentComboBox.getSelectedIndex();
-        if (index < 0) {
+        AgentType selected = (AgentType) agentComboBox.getSelectedItem();
+        if (selected == null) {
             JOptionPane.showMessageDialog(this,
                     "Seleccione un agente.",
                     "Error",
@@ -148,22 +150,18 @@ public class AgentUI extends JFrame {
 
         SwingWorker<String, Void> worker = new SwingWorker<>() {
             @Override
-            protected String doInBackground() throws Exception {
-                int option = index + 1;
-                IAgent agent = AgentFactory.create(option);
-                return agent.execute(input);
+            protected String doInBackground() {
+                return selected.create(client).execute(input);
             }
 
             @Override
             protected void done() {
                 try {
-                    String result = get();
-                    outputArea.setText(result);
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(AgentUI.this,
-                            "Error al ejecutar el agente: " + ex.getMessage(),
-                            "Error",
-                            JOptionPane.ERROR_MESSAGE);
+                    outputArea.setText(get());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    showExecutionError(e);
                 } finally {
                     executeButton.setEnabled(true);
                     agentComboBox.setEnabled(true);
@@ -173,6 +171,22 @@ public class AgentUI extends JFrame {
         };
 
         worker.execute();
+    }
+
+    /**
+     * Muestra la causa real del fallo en vez del envoltorio {@link ExecutionException}
+     * que agrega {@link SwingWorker#get()}.
+     */
+    private void showExecutionError(ExecutionException e) {
+        Throwable cause = e.getCause() != null ? e.getCause() : e;
+        String message = cause.getMessage() != null ? cause.getMessage() : cause.toString();
+
+        LOGGER.error("Error al ejecutar el agente", cause);
+        outputArea.setText("");
+        JOptionPane.showMessageDialog(this,
+                message,
+                "Error al ejecutar el agente",
+                JOptionPane.ERROR_MESSAGE);
     }
 
     private void clearFields() {

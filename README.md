@@ -14,29 +14,38 @@ Aplicación de escritorio en Java que conecta agentes de IA con un modelo local 
 ## Arquitectura
 
 ```
-AgentUI (Swing)
-   │ selecciona una opción y ejecuta
-   ▼
-AgentFactory ──► IAgent (Strategy)
-                    ├── GeneratorCodeAgent
-                    └── TranslatorTextAgent
-                           │ construye su prompt
-                           ▼
+Main (raíz de composición)
+   │ Config.load() ◄── application.properties
+   │ arma OllamaClient y lo inyecta
+   │
+   ├──► AgentUI (Swing)      ─┐
+   └──► Console (--console)  ─┤ eligen un AgentType
+                              ▼
+                     AgentType (registro)
+                              │ create(LlmClient)
+                              ▼
+                        IAgent (Strategy)
+                          ├── GeneratorCodeAgent
+                          └── TranslatorTextAgent
+                              │ construye su prompt
+                              ▼
+                          LlmClient (interfaz)
+                              │
+                              ▼
                  OllamaClient ──HTTP POST + timeout──► Ollama · /api/generate
-                           ▲
-                Config ◄── application.properties
 ```
 
 | Capa | Clase | Responsabilidad |
 |---|---|---|
-| Interfaz | `AgentUI` | Selección de agente, entrada, resultado y estado de progreso |
-| Creación | `AgentFactory` | Instancia el agente según la opción elegida |
+| Composición | `Main` | Carga la configuración, crea el cliente e inyecta la interfaz elegida |
+| Interfaz | `AgentUI`, `Console` | Selección de agente, entrada, resultado y estado de progreso |
+| Registro | `AgentType` | Nombre visible, etiqueta de entrada y creación de cada agente |
 | Contrato | `IAgent` | Interfaz común de ejecución: `String execute(String text)` |
 | Agentes | `GeneratorCodeAgent`, `TranslatorTextAgent` | Orquestan prompt + cliente |
 | Prompts | `GeneratorCodePrompt`, `TranslatorTextPrompt` | Instrucciones del sistema, aisladas del agente |
 | Cliente | `LlmClient` | Puerto de salida hacia el modelo |
 | Adaptador | `OllamaClient` | HTTP, JSON, validación de status, timeout y errores |
-| Configuración | `Config` | Carga `application.properties` desde el classpath |
+| Configuración | `Config` | Carga y valida `application.properties` desde el classpath |
 | DTOs | `RequestDTO`, `ResponseDTO` | Mapeo del contrato de la API |
 
 ## Requisitos
@@ -70,6 +79,12 @@ AgentFactory ──► IAgent (Strategy)
    mvn exec:java -Dexec.mainClass="org.example.Main"
    ```
 
+   Para usar la interfaz de texto en lugar de la ventana, agregar el argumento `--console`:
+
+   ```bash
+   mvn exec:java -Dexec.mainClass="org.example.Main" -Dexec.args="--console"
+   ```
+
 4. Verificación esperada: se abre una ventana titulada *Agentes IA*, con un selector de agente, un área de entrada, otra de resultado y los botones **Ejecutar** y **Limpiar**. Al elegir *Generador de código* e ingresar una especificación, la barra de progreso indica que hay una consulta en curso y el resultado aparece en el panel inferior.
 
 ## Configuración
@@ -90,23 +105,22 @@ Para usar otro modelo, descargarlo con `ollama pull` y actualizar `ollama.model`
 
 ```
 src/main/java/org/example/
-├── Main.java                 # Punto de entrada (lanza la UI)
-├── agents/                   # IAgent y agentes concretos por dominio
+├── Main.java                 # Punto de entrada y raíz de composición
+├── agents/                   # IAgent, AgentType y agentes por dominio
 │   ├── desarrollo/
 │   └── texto/
-├── client/                   # LlmClient, OllamaClient y LlmClientException
-├── config/Config.java        # Lectura de application.properties
+├── client/                   # LlmClient (interfaz), OllamaClient (HTTP) y excepción propia
+├── config/                   # Config y ConfigException
 ├── dtos/                     # RequestDTO y ResponseDTO
-├── factory/AgentFactory.java # Creación de agentes por opción
 ├── prompts/                  # Instrucciones por agente
-└── ui/                       # AgentUI (Swing) y Console (alternativa)
+└── ui/                       # AgentUI (Swing) y Console (--console)
 ```
 
 ## Decisiones de diseño
 
-- **Strategy + Factory**: `IAgent` define el contrato y `AgentFactory` centraliza la creación. Agregar un agente nuevo implica una clase de agente, su prompt y una línea en la fábrica; el resto del sistema no se toca.
+- **Strategy + registro único**: `IAgent` define el contrato y `AgentType` concentra nombre visible, etiqueta de entrada y forma de creación. Agregar un agente es agregar un valor del enum; la ventana y la consola lo toman de `values()` sin tocar su código.
+- **Dependencias inyectadas**: `Main` es la única clase que conoce las implementaciones. Los agentes reciben `LlmClient` por constructor, así que un test puede sustituirlo por un doble sin levantar Ollama ni usar la red.
 - **Prompts separados de los agentes**: las instrucciones viven en `prompts/` para poder ajustarlas sin modificar la lógica de ejecución.
-- **Cliente aislado y configuración externa**: `OllamaClient` es el único punto que conoce HTTP y JSON; los agentes dependen de la interfaz `LlmClient`, así que se puede sustituir por un doble sin levantar Ollama. El modelo, el endpoint y el timeout se cambian desde `application.properties`.
 - **Errores explícitos**: `LlmClientException` distingue una falla de una respuesta real del modelo. Se valida el status HTTP y se muestra el `error` que devuelve Ollama (por ejemplo, un modelo que no está descargado), en lugar de reportarlo todo como "respuesta vacía".
 - **Timeouts**: `ollama.timeout.seconds` limita la espera de la respuesta y la conexión tiene un tope de 10 s. Antes, una respuesta colgada bloqueaba el hilo de la UI de forma indefinida.
 - **UI no bloqueante**: la llamada al modelo corre en un `SwingWorker`, así la ventana responde mientras se espera la respuesta.
@@ -115,8 +129,8 @@ src/main/java/org/example/
 
 - No incluye tests automatizados; la separación `LlmClient`/`OllamaClient` ya deja el borde listo para probarlos.
 - Las respuestas se solicitan sin streaming (`stream: false`), por lo que el resultado aparece completo al final.
-- Las opciones de agente están fijas en la UI y el mapeo es posicional (índice + 1 en la fábrica); un enum o registro explícito sería más robusto.
-- `Console` quedó como alternativa por línea de comandos, desactivada en `Main`.
+- Una generación en curso no se puede cancelar desde la ventana.
+- No hay reintentos automáticos ante fallas transitorias de Ollama.
 
 ## Sobre el taller
 
