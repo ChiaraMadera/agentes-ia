@@ -22,7 +22,7 @@ AgentFactory ──► IAgent (Strategy)
                     └── TranslatorTextAgent
                            │ construye su prompt
                            ▼
-                      LLMClient ──HTTP POST──► Ollama · /api/generate
+                 OllamaClient ──HTTP POST + timeout──► Ollama · /api/generate
                            ▲
                 Config ◄── application.properties
 ```
@@ -34,7 +34,8 @@ AgentFactory ──► IAgent (Strategy)
 | Contrato | `IAgent` | Interfaz común de ejecución: `String execute(String text)` |
 | Agentes | `GeneratorCodeAgent`, `TranslatorTextAgent` | Orquestan prompt + cliente |
 | Prompts | `GeneratorCodePrompt`, `TranslatorTextPrompt` | Instrucciones del sistema, aisladas del agente |
-| Cliente | `LLMClient` | Serialización JSON, llamada HTTP y lectura de la respuesta |
+| Cliente | `LlmClient` | Puerto de salida hacia el modelo |
+| Adaptador | `OllamaClient` | HTTP, JSON, validación de status, timeout y errores |
 | Configuración | `Config` | Carga `application.properties` desde el classpath |
 | DTOs | `RequestDTO`, `ResponseDTO` | Mapeo del contrato de la API |
 
@@ -79,6 +80,9 @@ La configuración vive en `src/main/resources/application.properties`:
 |---|---|---|
 | `ollama.url` | `http://localhost:11434/api/generate` | Endpoint de generación de Ollama |
 | `ollama.model` | `llama3.2:3b` | Modelo consultado; debe estar descargado localmente |
+| `ollama.timeout.seconds` | `120` | Espera máxima de una respuesta completa, en segundos |
+
+La configuración se valida al arrancar: si falta una propiedad obligatoria o una URL no es `http`/`https`, la aplicación avisa qué corregir en lugar de fallar más tarde dentro de una llamada al modelo.
 
 Para usar otro modelo, descargarlo con `ollama pull` y actualizar `ollama.model`.
 
@@ -90,7 +94,7 @@ src/main/java/org/example/
 ├── agents/                   # IAgent y agentes concretos por dominio
 │   ├── desarrollo/
 │   └── texto/
-├── client/LLMClient.java     # Cliente HTTP del LLM
+├── client/                   # LlmClient, OllamaClient y LlmClientException
 ├── config/Config.java        # Lectura de application.properties
 ├── dtos/                     # RequestDTO y ResponseDTO
 ├── factory/AgentFactory.java # Creación de agentes por opción
@@ -102,13 +106,14 @@ src/main/java/org/example/
 
 - **Strategy + Factory**: `IAgent` define el contrato y `AgentFactory` centraliza la creación. Agregar un agente nuevo implica una clase de agente, su prompt y una línea en la fábrica; el resto del sistema no se toca.
 - **Prompts separados de los agentes**: las instrucciones viven en `prompts/` para poder ajustarlas sin modificar la lógica de ejecución.
-- **Cliente aislado y configuración externa**: `LLMClient` es el único punto que conoce HTTP y JSON, y el modelo o endpoint se cambian desde `application.properties` sin recompilar.
+- **Cliente aislado y configuración externa**: `OllamaClient` es el único punto que conoce HTTP y JSON; los agentes dependen de la interfaz `LlmClient`, así que se puede sustituir por un doble sin levantar Ollama. El modelo, el endpoint y el timeout se cambian desde `application.properties`.
+- **Errores explícitos**: `LlmClientException` distingue una falla de una respuesta real del modelo. Se valida el status HTTP y se muestra el `error` que devuelve Ollama (por ejemplo, un modelo que no está descargado), en lugar de reportarlo todo como "respuesta vacía".
+- **Timeouts**: `ollama.timeout.seconds` limita la espera de la respuesta y la conexión tiene un tope de 10 s. Antes, una respuesta colgada bloqueaba el hilo de la UI de forma indefinida.
 - **UI no bloqueante**: la llamada al modelo corre en un `SwingWorker`, así la ventana responde mientras se espera la respuesta.
 
 ## Limitaciones y próximos pasos
 
-- No incluye tests automatizados.
-- Los errores del cliente se devuelven como texto (`"Error: ..."`) en lugar de propagarse como excepción; conviene modelarlos con una excepción propia y mostrarlos en un diálogo.
+- No incluye tests automatizados; la separación `LlmClient`/`OllamaClient` ya deja el borde listo para probarlos.
 - Las respuestas se solicitan sin streaming (`stream: false`), por lo que el resultado aparece completo al final.
 - Las opciones de agente están fijas en la UI y el mapeo es posicional (índice + 1 en la fábrica); un enum o registro explícito sería más robusto.
 - `Console` quedó como alternativa por línea de comandos, desactivada en `Main`.

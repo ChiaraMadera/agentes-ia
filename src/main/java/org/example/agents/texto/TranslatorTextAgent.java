@@ -1,21 +1,24 @@
 package org.example.agents.texto;
 
 import org.example.agents.IAgent;
-import org.example.client.LLMClient;
+import org.example.client.LlmClient;
 import org.example.prompts.texto.TranslatorTextPrompt;
 
+import java.util.Objects;
+
+/**
+ * Agente que traduce un texto al castellano.
+ */
 public class TranslatorTextAgent implements IAgent {
 
-    private final LLMClient llmClient;
+    private final LlmClient llmClient;
 
-    public TranslatorTextAgent(LLMClient llmClient) {
-        this.llmClient = llmClient;
+    public TranslatorTextAgent(LlmClient llmClient) {
+        this.llmClient = Objects.requireNonNull(llmClient, "llmClient");
     }
 
     @Override
-    public String execute(String text) throws Exception {
-        return llmClient.generate(
-                TranslatorTextPrompt.build(text)
-        ) ;
+    public String execute(String text) {
+        return llmClient.generate(TranslatorTextPrompt.build(text));
     }
 }
