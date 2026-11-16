@@ -87,6 +87,16 @@ Main (raíz de composición)
 
 4. Verificación esperada: se abre una ventana titulada *Agentes IA*, con un selector de agente, un área de entrada, otra de resultado y los botones **Ejecutar** y **Limpiar**. Al elegir *Generador de código* e ingresar una especificación, la barra de progreso indica que hay una consulta en curso y el resultado aparece en el panel inferior.
 
+## Tests
+
+Ejecutar la suite automatizada:
+
+```bash
+mvn test
+```
+
+Cubre `Config`, agentes, `Console` y `OllamaClient` (incluyendo respuestas de error, body inválido, vacío y timeout).
+
 ## Configuración
 
 La configuración vive en `src/main/resources/application.properties`:
@@ -127,10 +137,11 @@ src/main/java/org/example/
 
 ## Limitaciones y próximos pasos
 
-- No incluye tests automatizados; la separación `LlmClient`/`OllamaClient` ya deja el borde listo para probarlos.
-- Las respuestas se solicitan sin streaming (`stream: false`), por lo que el resultado aparece completo al final.
-- Una generación en curso no se puede cancelar desde la ventana.
-- No hay reintentos automáticos ante fallas transitorias de Ollama.
+- Incluye tests automatizados (JUnit 5) para `Config`, agentes, consola y `OllamaClient`.
+- Las respuestas se entregan por streaming (`stream: true`): el resultado se va mostrando a medida que llega.
+- Una generación en curso puede cancelarse desde la ventana con el botón **Cancelar**.
+- Hay reintentos acotados (3 intentos) ante fallas transitorias de conexión/timeout.
+- La interfaz usa FlatLaf (tema claro) con botón por defecto, atajo `Ctrl+Enter` y panel redimensionable.
 
 ## Sobre el taller
 
