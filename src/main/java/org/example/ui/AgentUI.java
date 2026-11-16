@@ -41,6 +41,7 @@ public class AgentUI extends JFrame {
         setSize(700, 600);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
+        ((JPanel) getContentPane()).setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         // Panel superior: selección de agente
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));

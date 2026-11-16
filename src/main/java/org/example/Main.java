@@ -21,9 +21,14 @@ public class Main {
 
     public static void main(String[] args) {
         try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception ignored) {
-            // Si no se puede aplicar el L&F del sistema, se usa el por defecto.
+            Class.forName("com.formdev.flatlaf.FlatLightLaf");
+            UIManager.setLookAndFeel("com.formdev.flatlaf.FlatLightLaf");
+        } catch (Exception e) {
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception ignored) {
+                // Se usa el L&F por defecto.
+            }
         }
 
         final Config config;
