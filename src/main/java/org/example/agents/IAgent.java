@@ -13,9 +13,10 @@ public interface IAgent {
     /**
      * Ejecuta el agente sobre un texto de entrada.
      *
-     * @param text entrada del usuario
+     * @param text entrada del usuario; no puede ser {@code null} ni estar en blanco
      * @return texto generado por el LLM
      * @throws LlmClientException si la llamada al modelo falla
+     * @throws IllegalArgumentException si {@code text} es {@code null} o está en blanco
      */
     String execute(String text);
 }

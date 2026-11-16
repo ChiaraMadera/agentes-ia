@@ -19,6 +19,9 @@ public class GeneratorCodeAgent implements IAgent {
 
     @Override
     public String execute(String text) {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("La entrada no puede estar vacía");
+        }
         return llmClient.generate(GeneratorCodePrompt.build(text));
     }
 }

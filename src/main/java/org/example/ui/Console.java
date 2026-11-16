@@ -78,8 +78,9 @@ public class Console {
 
             try {
                 out.println(selected.create(client).execute(prompt));
-            } catch (LlmClientException e) {
-                out.println("Error: " + e.getMessage());
+            } catch (Exception e) {
+                String message = e.getMessage() != null ? e.getMessage() : e.toString();
+                out.println("Error: " + message);
             }
         }
     }

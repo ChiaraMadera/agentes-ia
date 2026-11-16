@@ -1,6 +1,9 @@
 package org.example.prompts.texto;
 
-public class TranslatorTextPrompt {
+public final class TranslatorTextPrompt {
+    private TranslatorTextPrompt() {
+    }
+
     public static String build(String text){
         return """
                 Traduce el siguiente texto al castellano.
