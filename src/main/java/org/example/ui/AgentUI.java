@@ -28,6 +28,7 @@ public class AgentUI extends JFrame {
     private final JTextArea outputArea;
     private final JButton executeButton;
     private final JButton cancelButton;
+    private final JButton exportButton;
     private final JButton clearButton;
     private final JProgressBar progressBar;
 
@@ -100,7 +101,9 @@ public class AgentUI extends JFrame {
         centerPanel.add(progressBar, gbc);
 
         // Botones
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        JPanel buttonPanel = new JPanel(new BorderLayout(10, 5));
+
+        JPanel primaryPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
         executeButton = new JButton("Ejecutar");
         executeButton.setMnemonic('E');
         executeButton.addActionListener(e -> executeAgent());
@@ -108,12 +111,22 @@ public class AgentUI extends JFrame {
         cancelButton.setMnemonic('C');
         cancelButton.setEnabled(false);
         cancelButton.addActionListener(e -> cancelExecution());
+        primaryPanel.add(executeButton);
+        primaryPanel.add(cancelButton);
+
+        JPanel secondaryPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
+        exportButton = new JButton("Exportar");
+        exportButton.setMnemonic('X');
+        exportButton.setEnabled(false);
+        exportButton.addActionListener(e -> exportResult());
         clearButton = new JButton("Limpiar");
         clearButton.setMnemonic('L');
         clearButton.addActionListener(e -> clearFields());
-        buttonPanel.add(executeButton);
-        buttonPanel.add(cancelButton);
-        buttonPanel.add(clearButton);
+        secondaryPanel.add(exportButton);
+        secondaryPanel.add(clearButton);
+
+        buttonPanel.add(primaryPanel, BorderLayout.CENTER);
+        buttonPanel.add(secondaryPanel, BorderLayout.EAST);
         gbc.gridy = 3;
         gbc.weighty = 0.0;
         centerPanel.add(buttonPanel, gbc);
@@ -202,6 +215,8 @@ public class AgentUI extends JFrame {
                 } finally {
                     executeButton.setEnabled(true);
                     cancelButton.setEnabled(false);
+                    boolean hasResult = !outputArea.getText().isBlank();
+                    exportButton.setEnabled(hasResult);
                     agentComboBox.setEnabled(true);
                     progressBar.setVisible(false);
                     currentWorker = null;
@@ -234,10 +249,50 @@ public class AgentUI extends JFrame {
                 JOptionPane.ERROR_MESSAGE);
     }
 
+    private void exportResult() {
+        String text = outputArea.getText();
+        if (text.isBlank()) {
+            JOptionPane.showMessageDialog(this,
+                    "No hay resultado para exportar.",
+                    "Exportar",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        java.io.File exportsDir = new java.io.File("exports");
+        exportsDir.mkdirs();
+
+        String timestamp = java.time.LocalDateTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        java.io.File suggested = new java.io.File(exportsDir, "resultado-" + timestamp + ".txt");
+
+        JFileChooser chooser = new JFileChooser(exportsDir);
+        chooser.setSelectedFile(suggested);
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        java.io.File file = chooser.getSelectedFile();
+        try (java.io.FileWriter writer = new java.io.FileWriter(file)) {
+            writer.write(text);
+            JOptionPane.showMessageDialog(this,
+                    "Archivo exportado exitosamente.",
+                    "Exportar",
+                    JOptionPane.INFORMATION_MESSAGE);
+        } catch (java.io.IOException e) {
+            LOGGER.error("Error al exportar el resultado", e);
+            JOptionPane.showMessageDialog(this,
+                    "No se pudo exportar el archivo: " + e.getMessage(),
+                    "Error al exportar",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void clearFields() {
         inputArea.setText("");
         outputArea.setText("");
         progressBar.setVisible(false);
+        exportButton.setEnabled(false);
         inputArea.requestFocusInWindow();
     }
 }

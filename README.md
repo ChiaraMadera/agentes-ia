@@ -142,6 +142,7 @@ src/main/java/org/example/
 - Una generación en curso puede cancelarse desde la ventana con el botón **Cancelar**.
 - Hay reintentos acotados (3 intentos) ante fallas transitorias de conexión/timeout.
 - La interfaz usa FlatLaf (tema claro) con botón por defecto, atajo `Ctrl+Enter` y panel redimensionable.
+- El resultado puede exportarse a un archivo (carpeta `exports/`, nombre con timestamp).
 
 ## Sobre el taller
 

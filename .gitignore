@@ -13,3 +13,6 @@ Thumbs.db
 
 # Tooling
 /.atl/
+
+# Exported results
+/exports/
