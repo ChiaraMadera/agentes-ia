@@ -135,21 +135,25 @@ src/main/java/org/example/
 - **Timeouts**: `ollama.timeout.seconds` limita la espera de la respuesta y la conexión tiene un tope de 10 s. Antes, una respuesta colgada bloqueaba el hilo de la UI de forma indefinida.
 - **UI no bloqueante**: la llamada al modelo corre en un `SwingWorker`, así la ventana responde mientras se espera la respuesta.
 
-## Limitaciones y próximos pasos
+## Resiliencia y experiencia de usuario
 
-- Incluye tests automatizados (JUnit 5) para `Config`, agentes, consola y `OllamaClient`.
-- Las respuestas se entregan por streaming (`stream: true`): el resultado se va mostrando a medida que llega.
-- Una generación en curso puede cancelarse desde la ventana con el botón **Cancelar**.
-- Hay reintentos acotados (3 intentos) ante fallas transitorias de conexión/timeout.
-- La interfaz usa FlatLaf (tema claro) con botón por defecto, atajo `Ctrl+Enter` y panel redimensionable.
-- El resultado puede exportarse a un archivo (carpeta `exports/`, nombre con timestamp).
+- **Streaming en tiempo real (`stream: true`)**: las respuestas se renderizan progresivamente en pantalla a medida que llegan los tokens desde Ollama.
+- **Cancelación en curso**: permite abortar una generación activa desde la ventana mediante el botón **Cancelar**.
+- **Reintentos acotados**: hasta 3 intentos automáticos ante fallas transitorias de conexión o *timeouts*.
+- **Interfaz moderna (FlatLaf)**: tema claro nativo, panel redimensionable, botón por defecto y envío rápido con `Ctrl+Enter`.
+- **Exportación de resultados**: guarda la salida generada en la carpeta `exports/` con marca de tiempo (*timestamp*).
+
+## Próximos pasos
+
+- Selector dinámico de modelos locales instalados en Ollama desde la interfaz.
+- Historial de consultas persistente por sesión.
 
 ## Sobre el taller
 
-Este proyecto forma parte del **Taller de Agentes de IA** dictado por **Emilio Mayer** en la **Universidad Provincial de Córdoba (UPC)**. El [repositorio base del taller](https://github.com/EmilioM1983/taller-aplicaciones-con-ia) contiene el cliente de consola original; esta versión lo extiende con una interfaz gráfica, una capa de agentes intercambiables y configuración externalizada.
+Este proyecto nació en el **Taller de Agentes de IA** dictado por **Emilio Mayer** en la **Universidad Provincial de Córdoba (UPC)**. A partir del [repositorio base del taller](https://github.com/EmilioM1983/taller-aplicaciones-con-ia), evolucionó hacia una aplicación completa con interfaz gráfica, arquitectura desacoplada, streaming, resiliencia ante errores y cobertura de tests automatizados.
 
 ## Autor
 
-**Chiara Madera** — proyecto de taller.
+**Chiara Madera**
 
 
