@@ -2,6 +2,8 @@ package org.example.agents;
 
 import org.example.client.LlmClientException;
 
+import java.util.function.Consumer;
+
 /**
  * Contrato común de todos los agentes.
  *
@@ -19,4 +21,22 @@ public interface IAgent {
      * @throws IllegalArgumentException si {@code text} es {@code null} o está en blanco
      */
     String execute(String text);
+
+    /**
+     * Ejecuta el agente entregando la respuesta por fragmentos a medida que llega.
+     *
+     * <p>La implementación por defecto delega en {@link #execute(String)} y entrega
+     * el resultado completo como un único fragmento.
+     *
+     * @param text    entrada del usuario
+     * @param onChunk consumidor de cada fragmento (puede ser {@code null})
+     * @return texto completo generado por el LLM
+     */
+    default String executeStreaming(String text, Consumer<String> onChunk) {
+        String result = execute(text);
+        if (onChunk != null) {
+            onChunk.accept(result);
+        }
+        return result;
+    }
 }

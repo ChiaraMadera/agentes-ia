@@ -27,8 +27,11 @@ public class AgentUI extends JFrame {
     private final JTextArea inputArea;
     private final JTextArea outputArea;
     private final JButton executeButton;
+    private final JButton cancelButton;
     private final JButton clearButton;
     private final JProgressBar progressBar;
+
+    private SwingWorker<String, Void> currentWorker;
 
     public AgentUI(LlmClient client) {
         this.client = Objects.requireNonNull(client, "client");
@@ -100,10 +103,15 @@ public class AgentUI extends JFrame {
         executeButton = new JButton("Ejecutar");
         executeButton.setMnemonic('E');
         executeButton.addActionListener(e -> executeAgent());
+        cancelButton = new JButton("Cancelar");
+        cancelButton.setMnemonic('C');
+        cancelButton.setEnabled(false);
+        cancelButton.addActionListener(e -> cancelExecution());
         clearButton = new JButton("Limpiar");
         clearButton.setMnemonic('L');
         clearButton.addActionListener(e -> clearFields());
         buttonPanel.add(executeButton);
+        buttonPanel.add(cancelButton);
         buttonPanel.add(clearButton);
         gbc.gridy = 3;
         gbc.weighty = 0.0;
@@ -160,33 +168,53 @@ public class AgentUI extends JFrame {
         }
 
         executeButton.setEnabled(false);
+        cancelButton.setEnabled(true);
         agentComboBox.setEnabled(false);
         progressBar.setVisible(true);
         outputArea.setText("");
 
-        SwingWorker<String, Void> worker = new SwingWorker<>() {
+        currentWorker = new SwingWorker<>() {
             @Override
             protected String doInBackground() {
-                return selected.create(client).execute(input);
+                selected.create(client).executeStreaming(input, chunk ->
+                        SwingUtilities.invokeLater(() -> outputArea.append(chunk)));
+                return null;
             }
 
             @Override
             protected void done() {
                 try {
-                    outputArea.setText(get());
+                    if (isCancelled()) {
+                        outputArea.setText("Operación cancelada.");
+                        return;
+                    }
+                    String result = get();
+                    if (result != null && !result.isEmpty() && outputArea.getText().isEmpty()) {
+                        outputArea.setText(result);
+                    }
+                } catch (java.util.concurrent.CancellationException e) {
+                    outputArea.setText("Operación cancelada.");
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
                     showExecutionError(e);
                 } finally {
                     executeButton.setEnabled(true);
+                    cancelButton.setEnabled(false);
                     agentComboBox.setEnabled(true);
                     progressBar.setVisible(false);
+                    currentWorker = null;
                 }
             }
         };
 
-        worker.execute();
+        currentWorker.execute();
+    }
+
+    private void cancelExecution() {
+        if (currentWorker != null && !currentWorker.isDone()) {
+            currentWorker.cancel(true);
+        }
     }
 
     /**

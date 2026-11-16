@@ -58,9 +58,9 @@ public class OllamaClient implements LlmClient {
             throw new LlmClientException("El prompt está vacío");
         }
 
-        HttpRequest request = buildRequest(prompt);
+        HttpRequest request = buildRequest(prompt, false);
         long startedAt = System.nanoTime();
-        HttpResponse<String> response = send(request);
+        HttpResponse<String> response = sendWithRetry(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
 
         LOGGER.info("Ollama respondió {} en {} ms con el modelo {}",
@@ -76,8 +76,67 @@ public class OllamaClient implements LlmClient {
         return extractResponse(response.body());
     }
 
-    private HttpRequest buildRequest(String prompt) {
-        RequestDTO body = new RequestDTO(config.getModel(), prompt, false);
+    @Override
+    public String generateStreaming(String prompt, java.util.function.Consumer<String> onChunk) {
+        if (prompt == null || prompt.isBlank()) {
+            throw new LlmClientException("El prompt está vacío");
+        }
+
+        HttpRequest request = buildRequest(prompt, true);
+        long startedAt = System.nanoTime();
+
+        final HttpResponse<java.util.stream.Stream<String>> response;
+        response = sendWithRetry(request, HttpResponse.BodyHandlers.ofLines());
+
+        long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
+        LOGGER.info("Ollama streaming respondió {} en {} ms con el modelo {}",
+                response.statusCode(), elapsedMs, config.getModel());
+
+        if (response.statusCode() / 100 != 2) {
+            String detail = response.body().collect(java.util.stream.Collectors.joining("\n"));
+            if (detail.isBlank()) {
+                detail = "<cuerpo vacío>";
+            }
+            throw new LlmClientException(
+                    "Ollama rechazó la petición (HTTP " + response.statusCode() + "): " + detail);
+        }
+
+        StringBuilder accumulated = new StringBuilder();
+        try (java.util.stream.Stream<String> lines = response.body()) {
+            java.util.Iterator<String> it = lines.iterator();
+            while (it.hasNext()) {
+                String line = it.next();
+                if (line == null || line.isBlank()) {
+                    continue;
+                }
+                ResponseDTO chunk;
+                try {
+                    chunk = mapper.readValue(line, ResponseDTO.class);
+                } catch (JsonProcessingException e) {
+                    throw new LlmClientException(
+                            "La respuesta del LLM no es JSON válido: " + preview(line), e);
+                }
+                if (chunk.error() != null && !chunk.error().isBlank()) {
+                    throw new LlmClientException(chunk.error());
+                }
+                if (chunk.response() != null) {
+                    accumulated.append(chunk.response());
+                    if (onChunk != null) {
+                        onChunk.accept(chunk.response());
+                    }
+                }
+            }
+        }
+
+        String result = accumulated.toString();
+        if (result.isBlank()) {
+            throw new LlmClientException("Ollama devolvió una respuesta vacía");
+        }
+        return result;
+    }
+
+    private HttpRequest buildRequest(String prompt, boolean stream) {
+        RequestDTO body = new RequestDTO(config.getModel(), prompt, stream);
 
         final String json;
         try {
@@ -94,21 +153,41 @@ public class OllamaClient implements LlmClient {
                 .build();
     }
 
-    private HttpResponse<String> send(HttpRequest request) {
-        try {
-            return httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        } catch (HttpTimeoutException e) {
+    private static final int MAX_ATTEMPTS = 3;
+
+    private <T> HttpResponse<T> sendWithRetry(HttpRequest request, HttpResponse.BodyHandler<T> handler) {
+        IOException lastIo = null;
+        HttpTimeoutException lastTimeout = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                return httpClient.send(request, handler);
+            } catch (HttpTimeoutException e) {
+                lastTimeout = e;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new LlmClientException("La llamada al LLM fue interrumpida", e);
+            } catch (IOException e) {
+                lastIo = e;
+            }
+
+            if (attempt < MAX_ATTEMPTS) {
+                try {
+                    Thread.sleep(200L * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new LlmClientException("La llamada al LLM fue interrumpida", ie);
+                }
+            }
+        }
+
+        if (lastTimeout != null) {
             throw new LlmClientException(
                     "Ollama no respondió en " + config.getRequestTimeout().toSeconds()
-                            + " s (modelo " + config.getModel() + ")", e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new LlmClientException("La llamada al LLM fue interrumpida", e);
-        } catch (IOException e) {
-            throw new LlmClientException(
-                    "No se pudo conectar con Ollama en " + config.getUrl()
-                            + "; verificá que el servicio esté corriendo", e);
+                            + " s (modelo " + config.getModel() + ")", lastTimeout);
         }
+        throw new LlmClientException(
+                "No se pudo conectar con Ollama en " + config.getUrl()
+                        + "; verificá que el servicio esté corriendo", lastIo);
     }
 
     private String extractResponse(String body) {

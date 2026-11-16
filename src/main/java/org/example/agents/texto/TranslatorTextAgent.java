@@ -24,4 +24,12 @@ public class TranslatorTextAgent implements IAgent {
         }
         return llmClient.generate(TranslatorTextPrompt.build(text));
     }
+
+    @Override
+    public String executeStreaming(String text, java.util.function.Consumer<String> onChunk) {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("La entrada no puede estar vacía");
+        }
+        return llmClient.generateStreaming(TranslatorTextPrompt.build(text), onChunk);
+    }
 }
