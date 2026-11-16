@@ -67,9 +67,23 @@ public class AgentUI extends JFrame {
         inputArea.setWrapStyleWord(true);
         JScrollPane inputScroll = new JScrollPane(inputArea);
         inputScroll.setBorder(BorderFactory.createTitledBorder("Entrada"));
+
+        // Área de output
+        outputArea = new JTextArea(8, 40);
+        outputArea.setLineWrap(true);
+        outputArea.setWrapStyleWord(true);
+        outputArea.setEditable(false);
+        outputArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane outputScroll = new JScrollPane(outputArea);
+        outputScroll.setBorder(BorderFactory.createTitledBorder("Resultado"));
+
+        // Split redimensionable entre entrada y resultado
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, inputScroll, outputScroll);
+        splitPane.setResizeWeight(0.4);
+        splitPane.setOneTouchExpandable(true);
         gbc.gridy = 1;
-        gbc.weighty = 0.4;
-        centerPanel.add(inputScroll, gbc);
+        gbc.weighty = 1.0;
+        centerPanel.add(splitPane, gbc);
 
         // Barra de progreso (oculta por defecto)
         progressBar = new JProgressBar();
@@ -84,8 +98,10 @@ public class AgentUI extends JFrame {
         // Botones
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
         executeButton = new JButton("Ejecutar");
+        executeButton.setMnemonic('E');
         executeButton.addActionListener(e -> executeAgent());
         clearButton = new JButton("Limpiar");
+        clearButton.setMnemonic('L');
         clearButton.addActionListener(e -> clearFields());
         buttonPanel.add(executeButton);
         buttonPanel.add(clearButton);
@@ -93,19 +109,19 @@ public class AgentUI extends JFrame {
         gbc.weighty = 0.0;
         centerPanel.add(buttonPanel, gbc);
 
-        // Área de output
-        outputArea = new JTextArea(8, 40);
-        outputArea.setLineWrap(true);
-        outputArea.setWrapStyleWord(true);
-        outputArea.setEditable(false);
-        outputArea.setBackground(new Color(245, 245, 245));
-        JScrollPane outputScroll = new JScrollPane(outputArea);
-        outputScroll.setBorder(BorderFactory.createTitledBorder("Resultado"));
-        gbc.gridy = 4;
-        gbc.weighty = 0.6;
-        centerPanel.add(outputScroll, gbc);
-
         add(centerPanel, BorderLayout.CENTER);
+
+        // Botón por defecto + atajo Ctrl+Enter para ejecutar
+        getRootPane().setDefaultButton(executeButton);
+        InputMap inputMap = inputArea.getInputMap(JComponent.WHEN_FOCUSED);
+        ActionMap actionMap = inputArea.getActionMap();
+        inputMap.put(KeyStroke.getKeyStroke("control ENTER"), "execute");
+        actionMap.put("execute", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                executeAgent();
+            }
+        });
 
         // Panel inferior: autoría
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 5));
@@ -182,7 +198,7 @@ public class AgentUI extends JFrame {
         String message = cause.getMessage() != null ? cause.getMessage() : cause.toString();
 
         LOGGER.error("Error al ejecutar el agente", cause);
-        outputArea.setText("");
+        outputArea.setText("Error: " + message);
         JOptionPane.showMessageDialog(this,
                 message,
                 "Error al ejecutar el agente",

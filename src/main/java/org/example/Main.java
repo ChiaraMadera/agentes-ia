@@ -20,11 +20,24 @@ public class Main {
     private static final String CONSOLE_FLAG = "--console";
 
     public static void main(String[] args) {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ignored) {
+            // Si no se puede aplicar el L&F del sistema, se usa el por defecto.
+        }
+
         final Config config;
         try {
             config = Config.load();
         } catch (ConfigException e) {
-            System.err.println("Configuración inválida: " + e.getMessage());
+            if (args.length > 0 && CONSOLE_FLAG.equalsIgnoreCase(args[0])) {
+                System.err.println("Configuración inválida: " + e.getMessage());
+            } else {
+                JOptionPane.showMessageDialog(null,
+                        "Configuración inválida: " + e.getMessage(),
+                        "Error de configuración",
+                        JOptionPane.ERROR_MESSAGE);
+            }
             System.exit(1);
             return;
         }
